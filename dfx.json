@@ -1,0 +1,25 @@
+{
+  "canisters": {
+    "d3Storage_backend": {
+      "main": "src/d3Storage_backend/main.mo",
+      "type": "motoko"
+    },
+    "d3Storage_frontend": {
+      "dependencies": [
+        "d3Storage_backend"
+      ],
+      "source": [
+        "src/d3Storage_frontend/assets"
+      ],
+      "type": "assets"
+    }
+  },
+  "defaults": {
+    "build": {
+      "args": "",
+      "packtool": ""
+    }
+  },
+  "output_env_file": ".env",
+  "version": 1
+}
