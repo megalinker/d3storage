@@ -1,0 +1,13 @@
+[package]
+name = "d3Storage"
+version = "1.0.0"
+description = "Decentralized Distributed Data (D3) Storage"
+repository = "https://github.com/ragpatel8742/d3storage"
+keywords = [ ]
+license = "MIT"
+
+[dependencies]
+base = "0.11.1"
+rand = "https://github.com/aviate-labs/rand.mo#v0.2.3"
+ulid = "https://github.com/aviate-labs/ulid.mo#v0.1.3"
+map = "https://github.com/ZhenyaUsenko/motoko-hash-map#v9.0.1"
