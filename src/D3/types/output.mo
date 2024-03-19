@@ -7,7 +7,8 @@ module {
     public type GetFileOutputType = ?{
         fileId : Text;
         fileData : Blob;
-        filename : Text;
+        fileSize : Nat64;
+        fileName : Text;
         fileType : Text;
     };
 

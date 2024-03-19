@@ -29,6 +29,15 @@ module {
 
     ////////////////////////////////////////////////////////////////////////////
 
+    public type FileAttribute = {
+        #FileId;
+        #FileNameSize;
+        #FileType;
+        #FileSize;
+    };
+
+    ////////////////////////////////////////////////////////////////////////////
+
     public class D3() {
         public let storageRegionMap : Map.Map<RegionId, StorageRegion> = Map.new();
         public let fileLocationMap : Map.Map<FileId, FileLocation> = Map.new();

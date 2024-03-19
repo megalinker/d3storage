@@ -5,18 +5,15 @@ import Prelude "mo:base/Prelude";
 import Map "mo:map/Map";
 import { nhash; thash; } "mo:map/Map";
 import Filebase "../types/filebase";
-import {
-    REGION_ID;
-    FILE_SIZE_OFFSET;
-    FILE_NAME_SIZE_OFFSET;
-    FILE_TYPE_SIZE_OFFSET;
-    FILE_DATA_OFFSET;
-} "../types/filebase";
+import { REGION_ID; } "../types/filebase";
 import InputTypes "../types/input";
 import OutputTypes "../types/output";
 import Utils "utils";
+import StorageClasses "../storageClasses";
 
 module {
+
+    let { NTDO; } = StorageClasses;
 
     public func storeFile({
         d3 : Filebase.D3;
@@ -41,9 +38,19 @@ module {
         let fileNameObjectSize = Nat64.fromNat(fileNameObject.size());
         let fileTypeObjectSize = Nat64.fromNat(fileTypeObject.size());
 
-        let fileNameOffset = FILE_DATA_OFFSET + fileDataObjectSize;
-        let fileTypeOffset = fileNameOffset + fileNameObjectSize;
-        let bufferOffset = fileTypeOffset + fileTypeObjectSize;
+        let {
+            fileSizeOffset;
+            fileNameSizeOffset;
+            fileTypeSizeOffset;
+            fileDataOffset;
+            fileNameOffset;
+            fileTypeOffset;
+            bufferOffset;
+        } = NTDO.getAllRelativeOffsets({
+            fileSize = fileDataObjectSize;
+            fileNameSize = fileNameObjectSize;
+            fileTypeSize = fileTypeObjectSize;
+        });
 
         let totalFileSize = bufferOffset + Filebase.PAGE_SIZE;
 
@@ -55,10 +62,10 @@ module {
             let requiredPages = evaluateRequiredPages({ previousOffset = currentOffset; fileSize = totalFileSize });
             ignore Region.grow(region, requiredPages);
 
-            Region.storeNat64(region, currentOffset + FILE_SIZE_OFFSET, fileDataObjectSize);
-            Region.storeNat64(region, currentOffset + FILE_NAME_SIZE_OFFSET, fileNameObjectSize);
-            Region.storeNat64(region, currentOffset + FILE_TYPE_SIZE_OFFSET, fileTypeObjectSize);
-            Region.storeBlob(region, currentOffset + FILE_DATA_OFFSET, fileDataObject);
+            Region.storeNat64(region, currentOffset + fileSizeOffset, fileDataObjectSize);
+            Region.storeNat64(region, currentOffset + fileNameSizeOffset, fileNameObjectSize);
+            Region.storeNat64(region, currentOffset + fileTypeSizeOffset, fileTypeObjectSize);
+            Region.storeBlob(region, currentOffset + fileDataOffset, fileDataObject);
             Region.storeBlob(region, currentOffset + fileNameOffset, fileNameObject);
             Region.storeBlob(region, currentOffset + fileTypeOffset, fileTypeObject);
 

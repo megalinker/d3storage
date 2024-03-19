@@ -6,7 +6,6 @@ import OutputTypes "types/output";
 
 module {
 
-
     public func updateOperation({
         d3 : Filebase.D3;
         updateOperationInput : InputTypes.UpdateOperationInputType;

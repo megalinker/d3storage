@@ -1,9 +1,11 @@
 import Filebase "types/filebase";
 import Put "modules/put";
 import Get "modules/get";
+import GetHttp "modules/getHttp";
 import Service "service";
 import OutputTypes "types/output";
 import InputTypes "types/input";
+import HttpTypes "types/http";
 
 module {
 
@@ -25,5 +27,13 @@ module {
     public type QueryOperationInputType = InputTypes.QueryOperationInputType;
     public type QueryOperationOutputType = OutputTypes.QueryOperationOutputType;
     public let queryOperation = Service.queryOperation;
+
+    public type HttpRequest = HttpTypes.HttpRequest;
+    public type HttpResponse = HttpTypes.HttpResponse;
+    public let getFileHTTP = GetHttp.getFileHTTP;
+
+    public type StreamingCallbackToken = HttpTypes.StreamingCallbackToken;
+    public type StreamingCallbackHttpResponse = HttpTypes.StreamingCallbackHttpResponse;
+    public let httpStreamingCallback = GetHttp.httpStreamingCallback;
 
 };
