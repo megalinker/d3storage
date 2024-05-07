@@ -23,6 +23,8 @@ module {
         fileId : Text;
     };
 
+    public type GetFileIdsInputType = {};
+
     public type UpdateOperationInputType = {
         #StoreFile : StoreFileInputType;
         #StoreFileMetadata : StoreFileMetadataInputType;
@@ -31,5 +33,6 @@ module {
 
     public type QueryOperationInputType = {
         #GetFile : GetFileInputType;
+        #GetFileIds : GetFileIdsInputType;
     };
 };

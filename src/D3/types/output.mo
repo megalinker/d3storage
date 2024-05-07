@@ -22,6 +22,17 @@ module {
         fileType : Text;
     };
 
+    public type FileIdItemType = {
+        fileId : Text;
+        offset : Nat64;
+        fileName : Text;
+        fileType : Text;
+    };
+
+    public type GetFileIdsOutputType = {
+        fileIds : [ FileIdItemType ];
+    };
+
     public type UpdateOperationOutputType = {
         #StoreFileOutput : StoreFileOutputType;
         #StoreFileMetadataOutput : StoreFileMetadataOutputType;
@@ -30,6 +41,7 @@ module {
 
     public type QueryOperationOutputType = {
         #GetFileOutput : GetFileOutputType;
+        #GetFileIdsOutput : GetFileIdsOutputType;
     };
 
 };

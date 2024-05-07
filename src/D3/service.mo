@@ -34,6 +34,9 @@ module {
             case (#GetFile(getFileInput)) {
                 return #GetFileOutput(Get.getFile({ d3; getFileInput; }))
             };
+            case (#GetFileIds(getFileIdsInput)) {
+                return #GetFileIdsOutput(Get.getFileIds({ d3; getFileIdsInput; }))
+            };
         };
     };
 

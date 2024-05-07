@@ -2,6 +2,7 @@ import Region "mo:base/Region";
 import Text "mo:base/Text";
 import Nat64 "mo:base/Nat64";
 import Prelude "mo:base/Prelude";
+import Buffer "mo:base/Buffer";
 import Map "mo:map/Map";
 import { nhash; thash; } "mo:map/Map";
 import Filebase "../types/filebase";
@@ -50,6 +51,24 @@ module {
         };
 
         Prelude.unreachable();
+    };
+
+    public func getFileIds({
+        d3 : Filebase.D3;
+        getFileIdsInput : InputTypes.GetFileIdsInputType;
+    }) : OutputTypes.GetFileIdsOutputType {
+
+        let {} = getFileIdsInput;
+        let fileLocationMap = d3.fileLocationMap;
+
+        let fileIdsBuffer = Buffer.Buffer<OutputTypes.FileIdItemType>(Map.size(fileLocationMap));
+        for ((fileId, { offset; fileName; fileType; }) in Map.entries(fileLocationMap)) {
+            fileIdsBuffer.add({ fileId; offset; fileName; fileType; });
+        };
+
+        return {
+            fileIds = Buffer.toArray(fileIdsBuffer);
+        };
     };
 
 };

@@ -16,9 +16,22 @@ module {
     public type StoreFileOutputType = OutputTypes.StoreFileOutputType;
     public let storeFile = Put.storeFile;
 
+    public type storeFileMetadataInputType = InputTypes.StoreFileMetadataInputType;
+    public type storeFileMetadataOutputType = OutputTypes.StoreFileMetadataOutputType;
+    public let storeFileMetadata = Put.storeFileMetadata;
+
+    public type StoreFileChunkInputType = InputTypes.StoreFileChunkInputType;
+    public type StoreFileChunkOutputType = OutputTypes.StoreFileChunkOutputType;
+    public let storeFileChunk = Put.storeFileChunk;
+
     public type GetFileInputType = InputTypes.GetFileInputType;
     public type GetFileOutputType = OutputTypes.GetFileOutputType;
     public let getFile = Get.getFile;
+
+    public type GetFileIdsInputType = InputTypes.GetFileIdsInputType;
+    public type GetFileIdsOutputType = OutputTypes.GetFileIdsOutputType;
+    public type FileIdItemType = OutputTypes.FileIdItemType;
+    public let getFileIds = Get.getFileIds;
 
     public type UpdateOperationInputType = InputTypes.UpdateOperationInputType;
     public type UpdateOperationOutputType = OutputTypes.UpdateOperationOutputType;
