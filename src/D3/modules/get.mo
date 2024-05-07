@@ -2,7 +2,6 @@ import Region "mo:base/Region";
 import Text "mo:base/Text";
 import Nat64 "mo:base/Nat64";
 import Prelude "mo:base/Prelude";
-import Array "mo:base/Array";
 import Map "mo:map/Map";
 import { nhash; thash; } "mo:map/Map";
 import Filebase "../types/filebase";

@@ -22,19 +22,6 @@ module {
 
     public let PAGE_SIZE : Nat64 = 65536;
     public let REGION_ID : Nat = 16;
-    public let FILE_SIZE_OFFSET : Nat64 = 0;
-    public let FILE_NAME_SIZE_OFFSET : Nat64 = 8;
-    public let FILE_TYPE_SIZE_OFFSET : Nat64 = 16;
-    public let FILE_DATA_OFFSET : Nat64 = 24;
-
-    ////////////////////////////////////////////////////////////////////////////
-
-    public type FileAttribute = {
-        #FileId;
-        #FileNameSize;
-        #FileType;
-        #FileSize;
-    };
 
     ////////////////////////////////////////////////////////////////////////////
 

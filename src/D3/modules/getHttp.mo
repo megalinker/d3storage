@@ -1,7 +1,5 @@
 import Filebase "../types/filebase";
 import StorageClasses "../storageClasses";
-import InputTypes "../types/input";
-import OutputTypes "../types/output";
 import HttpTypes "../types/http";
 import HttpParser "mo:httpParser";
 import Map "mo:map/Map";
@@ -11,8 +9,6 @@ import Region "mo:base/Region";
 import Prelude "mo:base/Prelude";
 import Nat64 "mo:base/Nat64";
 import Text "mo:base/Text";
-import Get "get";
-import Http "../types/http";
 
 module {
 
