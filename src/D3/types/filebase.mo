@@ -22,6 +22,7 @@ module {
 
     public let PAGE_SIZE : Nat64 = 65536;
     public let REGION_ID : Nat = 16;
+    public let CHUNK_SIZE : Nat64 = 1_800_000;    // ~1.8MB
 
     ////////////////////////////////////////////////////////////////////////////
 

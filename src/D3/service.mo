@@ -15,6 +15,12 @@ module {
             case (#StoreFile(storeFileInput)) {
                 return #StoreFileOutput(await Put.storeFile({ d3; storeFileInput; }))
             };
+            case (#StoreFileMetadata(storeFileMetadataInput)) {
+                return #StoreFileMetadataOutput(await Put.storeFileMetadata({ d3; storeFileMetadataInput; }))
+            };
+            case (#StoreFileChunk(storeFileChunkInput)) {
+                return #StoreFileChunkOutput(await Put.storeFileChunk({ d3; storeFileChunkInput; }))
+            };
         };
 
     };

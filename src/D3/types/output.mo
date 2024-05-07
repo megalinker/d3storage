@@ -1,7 +1,17 @@
 module {
-    
+
     public type StoreFileOutputType = {
         fileId : Text;
+    };
+    public type StoreFileMetadataOutputType = {
+        fileId : Text;
+        chunkSizeInBytes : Nat64;
+        numOfChunks : Nat64;
+    };
+
+    public type StoreFileChunkOutputType = {
+        fileId : Text;
+        chunkIndex : Nat64;
     };
 
     public type GetFileOutputType = ?{
@@ -14,6 +24,8 @@ module {
 
     public type UpdateOperationOutputType = {
         #StoreFileOutput : StoreFileOutputType;
+        #StoreFileMetadataOutput : StoreFileMetadataOutputType;
+        #StoreFileChunkOutput : StoreFileChunkOutputType;
     };
 
     public type QueryOperationOutputType = {
