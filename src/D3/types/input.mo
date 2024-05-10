@@ -1,6 +1,8 @@
 
 module {
 
+    ///////////////////////////// UPDATE OPERATIONS ////////////////////////
+
     public type StoreFileInputType = {
         fileDataObject : Blob;
         fileName : Text;
@@ -19,6 +21,12 @@ module {
         chunkIndex : Nat64;
     };
 
+    ///////////////////////////// QUERY OPERATIONS ////////////////////////
+
+    public type GetFileMetadataInputType = {
+        fileId : Text;
+    };
+
     public type GetFileInputType = {
         fileId : Text;
     };
@@ -32,7 +40,11 @@ module {
     };
 
     public type QueryOperationInputType = {
+        #GetFileMetadata : GetFileMetadataInputType;
         #GetFile : GetFileInputType;
         #GetFileIds : GetFileIdsInputType;
     };
+
+    //////////////////////////////////////////////////////////////////////
+
 };

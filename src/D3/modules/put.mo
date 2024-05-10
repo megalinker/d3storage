@@ -11,6 +11,7 @@ import InputTypes "../types/input";
 import OutputTypes "../types/output";
 import Utils "utils";
 import StorageClasses "../storageClasses";
+import Commons "commons";
 
 module {
 
@@ -164,7 +165,7 @@ module {
             return {
                 fileId;
                 chunkSizeInBytes = Filebase.CHUNK_SIZE;
-                numOfChunks = evaluateRequiredChunks({ fileSizeInBytes });
+                numOfChunks = Commons.evaluateNumOfChunks({ fileSizeInBytes });
             };
         };
 
@@ -172,15 +173,6 @@ module {
 
         Prelude.unreachable();
 
-    };
-
-    private func evaluateRequiredChunks({ fileSizeInBytes : Nat64 }) : Nat64 {
-        let reminderBytes = fileSizeInBytes % Filebase.CHUNK_SIZE;
-        var requiredChunks = (fileSizeInBytes - reminderBytes) / Filebase.CHUNK_SIZE;
-        if (reminderBytes > 0) {
-            requiredChunks := requiredChunks + 1;
-        };
-        return requiredChunks;
     };
 
     public func storeFileChunk({
@@ -205,8 +197,8 @@ module {
             let region = storageRegion.region;
 
             let fileSizeInBytes = Region.loadNat64(region, offset + NTDO.getFileSizeRelativeOffset());
-            let numOfChunks = evaluateRequiredChunks({ fileSizeInBytes });
-            let chunkSize = evaluateChunkSize({ chunkIndex; totalNumOfChunks = numOfChunks; fileSizeInBytes });
+            let numOfChunks = Commons.evaluateNumOfChunks({ fileSizeInBytes });
+            let chunkSize = Commons.evaluateChunkSize({ chunkIndex; numOfChunks; fileSizeInBytes });
 
             /////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -235,12 +227,4 @@ module {
         Prelude.unreachable();
     };
 
-    private func evaluateChunkSize({ chunkIndex : Nat64; totalNumOfChunks : Nat64; fileSizeInBytes : Nat64 }) : Nat64 {
-
-        if (chunkIndex < totalNumOfChunks - 1) {
-            return Filebase.CHUNK_SIZE;
-        } else {
-            return fileSizeInBytes % Filebase.CHUNK_SIZE;
-        };
-    };
 };

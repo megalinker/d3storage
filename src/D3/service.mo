@@ -31,6 +31,9 @@ module {
     }) : OutputTypes.QueryOperationOutputType {
 
         switch (queryOperationInput) {
+            case (#GetFileMetadata(getFileMetadataInput)) {
+                return #GetFileMetadataOutput(Get.getFileMetadata({ d3; getFileMetadataInput; }))
+            };
             case (#GetFile(getFileInput)) {
                 return #GetFileOutput(Get.getFile({ d3; getFileInput; }))
             };
