@@ -1,16 +1,15 @@
-import FilebaseTypes "../types/filebase";
 
 module {
 
     // Name, Type, Data Only
     public object NTDO = {
-        public let STORAGE_CLASS_CODE : Nat8 = 1;
+        public let STORAGE_CLASS_CODE : Nat64 = 1;
 
         // storage class code
-        public func getStorageClassCodeOffset() : Nat64 { 0; };
+        public func getFileStorageClassCodeRelativeOffset() : Nat64 { 0; };
 
         // file size
-        public func getFileSizeRelativeOffset(): Nat64 { getStorageClassCodeOffset() + 1; };
+        public func getFileSizeRelativeOffset(): Nat64 { getFileStorageClassCodeRelativeOffset() + 1; };
 
         // file-name size
         public func getFileNameSizeRelativeOffset() : Nat64 { getFileSizeRelativeOffset() + 8; };
@@ -44,6 +43,7 @@ module {
             fileNameSize : Nat64;
             fileTypeSize : Nat64
         }) : {
+            fileStorageClassCodeOffset : Nat64;
             fileSizeOffset : Nat64;
             fileNameSizeOffset : Nat64;
             fileTypeSizeOffset : Nat64;
@@ -53,6 +53,7 @@ module {
             bufferOffset : Nat64;
         } {
             {
+                fileStorageClassCodeOffset = getFileStorageClassCodeRelativeOffset();
                 fileSizeOffset = getFileSizeRelativeOffset();
                 fileNameSizeOffset = getFileNameSizeRelativeOffset();
                 fileTypeSizeOffset = getFileTypeSizeRelativeOffset();
