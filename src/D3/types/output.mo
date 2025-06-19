@@ -16,6 +16,11 @@ module {
         chunkIndex : Nat64;
     };
 
+    public type DeleteFileOutputType = {
+        success : Bool;
+        error : ?Text;
+    };
+
     ///////////////////////////// QUERY OPERATIONS ////////////////////////
 
     public type GetFileMetadataOutputType = ?{
@@ -43,13 +48,21 @@ module {
     };
 
     public type GetFileIdsOutputType = {
-        fileIds : [ FileIdItemType ];
+        fileIds : [FileIdItemType];
+    };
+
+    public type CleanupStats = {
+        scanned : Nat;
+        reclaimed : Nat;
+        bytesFreed : Nat64;
     };
 
     public type UpdateOperationOutputType = {
         #StoreFileOutput : StoreFileOutputType;
         #StoreFileMetadataOutput : StoreFileMetadataOutputType;
         #StoreFileChunkOutput : StoreFileChunkOutputType;
+        #DeleteFileOutput : DeleteFileOutputType;
+        #CleanupAbandonedUploadsOutput : CleanupStats;
     };
 
     public type QueryOperationOutputType = {

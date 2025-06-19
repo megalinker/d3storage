@@ -1,4 +1,3 @@
-
 module {
 
     ///////////////////////////// UPDATE OPERATIONS ////////////////////////
@@ -21,6 +20,10 @@ module {
         chunkIndex : Nat64;
     };
 
+    public type DeleteFileInputType = {
+        fileId : Text;
+    };
+
     ///////////////////////////// QUERY OPERATIONS ////////////////////////
 
     public type GetFileMetadataInputType = {
@@ -33,10 +36,16 @@ module {
 
     public type GetFileIdsInputType = {};
 
+    public type CleanupAbandonedUploadsInputType = {
+        timeoutNanos : Nat64;
+    };
+
     public type UpdateOperationInputType = {
         #StoreFile : StoreFileInputType;
         #StoreFileMetadata : StoreFileMetadataInputType;
         #StoreFileChunk : StoreFileChunkInputType;
+        #DeleteFile : DeleteFileInputType;
+        #CleanupAbandonedUploads : CleanupAbandonedUploadsInputType;
     };
 
     public type QueryOperationInputType = {

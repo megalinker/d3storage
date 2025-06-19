@@ -21,11 +21,21 @@ shared ({ caller }) actor class Test() = this {
 
     public shared func uploadTestFile() : async D3.UpdateOperationOutputType {
 
-        await D3.updateOperation({ d3; updateOperationInput = #StoreFile({
-            fileDataObject = Blob.fromArray(TestFile.SoccerBall);
-            fileName = "SoccerBall.jpeg";
-            fileType = "image/jpeg";
-        })});
+        await D3.updateOperation({
+            d3;
+            updateOperationInput = #StoreFile({
+                fileDataObject = Blob.fromArray(TestFile.SoccerBall);
+                fileName = "SoccerBall.jpeg";
+                fileType = "image/jpeg";
+            });
+        });
+    };
+
+    public shared func deleteTestFile(fileId : Text) : async D3.UpdateOperationOutputType {
+        await D3.updateOperation({
+            d3;
+            updateOperationInput = #DeleteFile({ fileId });
+        });
     };
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -37,7 +47,7 @@ shared ({ caller }) actor class Test() = this {
 
     public query ({ caller }) func http_request_streaming_callback(streamingCallbackToken : D3.StreamingCallbackToken) : async D3.StreamingCallbackHttpResponse {
 
-        D3.httpStreamingCallback({ d3; streamingCallbackToken; });
+        D3.httpStreamingCallback({ d3; streamingCallbackToken });
     };
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////

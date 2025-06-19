@@ -1,10 +1,10 @@
 import Region "mo:base/Region";
 import Text "mo:base/Text";
 import Nat64 "mo:base/Nat64";
-import Prelude "mo:base/Prelude";
 import Buffer "mo:base/Buffer";
+import Debug "mo:base/Debug";
 import Map "mo:map/Map";
-import { nhash; thash; } "mo:map/Map";
+import { nhash; thash } "mo:map/Map";
 import Filebase "../types/filebase";
 import StorageClasses "../storageClasses";
 import InputTypes "../types/input";
@@ -13,45 +13,81 @@ import Commons "commons";
 
 module {
 
-    let { NTDO; } = StorageClasses;
+    let { NTDO } = StorageClasses;
+
+    private type FileContext = {
+        region : Region.Region;
+        offset : Nat64;
+        fileSize : Nat64;
+        fileNameSize : Nat64;
+        fileTypeSize : Nat64;
+    };
+
+    private func _getFileContext(d3 : Filebase.D3, fileId : Filebase.FileId) : ?FileContext {
+        switch (Map.get(d3.fileLocationMap, thash, fileId)) {
+            case (null) { return null };
+            case (?fileLocation) {
+                switch (Map.get(d3.storageRegionMap, nhash, fileLocation.regionId)) {
+                    case (null) { return null };
+                    case (?storageRegion) {
+                        let offset = fileLocation.offset;
+                        let region = storageRegion.region;
+
+                        let fileSize = Region.loadNat64(region, offset + NTDO.getFileSizeRelativeOffset());
+                        let fileNameSize = Region.loadNat64(region, offset + NTDO.getFileNameSizeRelativeOffset());
+                        let fileTypeSize = Region.loadNat64(region, offset + NTDO.getFileTypeSizeRelativeOffset());
+
+                        return ?{
+                            region;
+                            offset;
+                            fileSize;
+                            fileNameSize;
+                            fileTypeSize;
+                        };
+                    };
+                };
+            };
+        };
+    };
 
     public func getFileMetadata({
         d3 : Filebase.D3;
         getFileMetadataInput : InputTypes.GetFileMetadataInputType;
     }) : OutputTypes.GetFileMetadataOutputType {
 
-        let { fileId; } = getFileMetadataInput;
-        let storageRegionMap = d3.storageRegionMap;
-        let fileLocationMap = d3.fileLocationMap;
+        let { fileId } = getFileMetadataInput;
 
-        if (not Map.has(fileLocationMap, thash, fileId)) {
-            return null;
-        };
+        switch (_getFileContext(d3, fileId)) {
+            case (null) {
+                return null;
+            };
+            case (?{ region; offset; fileSize; fileNameSize; fileTypeSize }) {
+                let fileName = switch (Text.decodeUtf8(Region.loadBlob(region, offset + NTDO.getFileNameRelativeOffset({ fileSize }), Nat64.toNat(fileNameSize)))) {
+                    case (?name) { name };
+                    case (null) {
+                        Debug.trap("Data corruption: failed to decode UTF-8 for fileName. FileId: " # fileId);
+                    };
+                };
 
-        ignore do ?{
-            let fileLocation = Map.get(fileLocationMap, thash, fileId)!;
-            let storageRegion = Map.get(storageRegionMap, nhash, fileLocation.regionId)!;
-            let offset = fileLocation.offset;
-            let region = storageRegion.region;
+                let fileType = switch (Text.decodeUtf8(Region.loadBlob(region, offset + NTDO.getFileTypeRelativeOffset({ fileSize; fileNameSize }), Nat64.toNat(fileTypeSize)))) {
+                    case (?typ) { typ };
+                    case (null) {
+                        Debug.trap("Data corruption: failed to decode UTF-8 for fileType. FileId: " # fileId);
+                    };
+                };
 
-            let fileSize = Region.loadNat64(region, offset + NTDO.getFileSizeRelativeOffset());
-            let fileNameSize = Region.loadNat64(region, offset + NTDO.getFileNameSizeRelativeOffset());
-            let fileTypeSize = Region.loadNat64(region, offset + NTDO.getFileTypeSizeRelativeOffset());
-
-            let fileName = Text.decodeUtf8(Region.loadBlob(region, offset + NTDO.getFileNameRelativeOffset({ fileSize }), Nat64.toNat(fileNameSize)))!;
-            let fileType = Text.decodeUtf8(Region.loadBlob(region, offset + NTDO.getFileTypeRelativeOffset({ fileSize; fileNameSize }), Nat64.toNat(fileTypeSize)))!;
-
-            return ?{
-                fileId;
-                fileName;
-                fileType;
-                fileSizeInBytes = fileSize;
-                chunkSizeInBytes = Filebase.CHUNK_SIZE;
-                numOfChunks = Commons.evaluateNumOfChunks({ fileSizeInBytes = fileSize });
+                return ?{
+                    fileId;
+                    fileName;
+                    fileType;
+                    fileSizeInBytes = fileSize;
+                    chunkSizeInBytes = Filebase.CHUNK_SIZE;
+                    numOfChunks = Commons.evaluateNumOfChunks({
+                        fileSizeInBytes = fileSize;
+                    });
+                };
             };
         };
-
-        Prelude.unreachable();        
     };
 
     public func getFile({
@@ -59,38 +95,44 @@ module {
         getFileInput : InputTypes.GetFileInputType;
     }) : OutputTypes.GetFileOutputType {
 
-        let { fileId; } = getFileInput;
-        let storageRegionMap = d3.storageRegionMap;
-        let fileLocationMap = d3.fileLocationMap;
+        let { fileId } = getFileInput;
 
-        if (not Map.has(fileLocationMap, thash, fileId)) {
-            return null;
-        };
+        switch (_getFileContext(d3, fileId)) {
+            case (null) {
+                return null;
+            };
+            case (?{ region; offset; fileSize; fileNameSize; fileTypeSize }) {
 
-        ignore do ?{
-            let fileLocation = Map.get(fileLocationMap, thash, fileId)!;
-            let storageRegion = Map.get(storageRegionMap, nhash, fileLocation.regionId)!;
-            let offset = fileLocation.offset;
-            let region = storageRegion.region;
+                if (fileSize > 2_000_000) {
+                    Debug.print("getFile: Attempted to fetch a file (" # Nat64.toText(fileSize) # " bytes) larger than the 2MB message limit. Use the HTTP interface instead.");
+                    return null;
+                };
 
-            let fileSize = Region.loadNat64(region, offset + NTDO.getFileSizeRelativeOffset());
-            let fileNameSize = Region.loadNat64(region, offset + NTDO.getFileNameSizeRelativeOffset());
-            let fileTypeSize = Region.loadNat64(region, offset + NTDO.getFileTypeSizeRelativeOffset());
+                let fileData = Region.loadBlob(region, offset + NTDO.getFileDataRelativeoffset(), Nat64.toNat(fileSize));
 
-            let fileData = Region.loadBlob(region, offset + NTDO.getFileDataRelativeoffset(), Nat64.toNat(fileSize));
-            let fileName = Text.decodeUtf8(Region.loadBlob(region, offset + NTDO.getFileNameRelativeOffset({ fileSize }), Nat64.toNat(fileNameSize)))!;
-            let fileType = Text.decodeUtf8(Region.loadBlob(region, offset + NTDO.getFileTypeRelativeOffset({ fileSize; fileNameSize }), Nat64.toNat(fileTypeSize)))!;
+                let fileName = switch (Text.decodeUtf8(Region.loadBlob(region, offset + NTDO.getFileNameRelativeOffset({ fileSize }), Nat64.toNat(fileNameSize)))) {
+                    case (?name) { name };
+                    case (null) {
+                        Debug.trap("Data corruption: failed to decode UTF-8 for fileName. FileId: " # fileId);
+                    };
+                };
 
-            return ?{
-                fileId;
-                fileData;
-                fileSize;
-                fileName;
-                fileType;
+                let fileType = switch (Text.decodeUtf8(Region.loadBlob(region, offset + NTDO.getFileTypeRelativeOffset({ fileSize; fileNameSize }), Nat64.toNat(fileTypeSize)))) {
+                    case (?typ) { typ };
+                    case (null) {
+                        Debug.trap("Data corruption: failed to decode UTF-8 for fileType. FileId: " # fileId);
+                    };
+                };
+
+                return ?{
+                    fileId;
+                    fileData;
+                    fileSize;
+                    fileName;
+                    fileType;
+                };
             };
         };
-
-        Prelude.unreachable();
     };
 
     public func getFileIds({
@@ -102,13 +144,12 @@ module {
         let fileLocationMap = d3.fileLocationMap;
 
         let fileIdsBuffer = Buffer.Buffer<OutputTypes.FileIdItemType>(Map.size(fileLocationMap));
-        for ((fileId, { offset; fileName; fileType; }) in Map.entries(fileLocationMap)) {
-            fileIdsBuffer.add({ fileId; offset; fileName; fileType; });
+        for ((fileId, { offset; fileName; fileType }) in Map.entries(fileLocationMap)) {
+            fileIdsBuffer.add({ fileId; offset; fileName; fileType });
         };
 
         return {
             fileIds = Buffer.toArray(fileIdsBuffer);
         };
     };
-
 };

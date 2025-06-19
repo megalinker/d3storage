@@ -1,4 +1,3 @@
-
 module {
 
     // Name, Type, Data Only
@@ -6,42 +5,52 @@ module {
         public let STORAGE_CLASS_CODE : Nat64 = 1;
 
         // storage class code
-        public func getFileStorageClassCodeRelativeOffset() : Nat64 { 0; };
+        public func getFileStorageClassCodeRelativeOffset() : Nat64 { 0 };
 
         // file size
-        public func getFileSizeRelativeOffset(): Nat64 { getFileStorageClassCodeRelativeOffset() + 1; };
+        public func getFileSizeRelativeOffset() : Nat64 {
+            getFileStorageClassCodeRelativeOffset() + 8;
+        };
 
         // file-name size
-        public func getFileNameSizeRelativeOffset() : Nat64 { getFileSizeRelativeOffset() + 8; };
+        public func getFileNameSizeRelativeOffset() : Nat64 {
+            getFileSizeRelativeOffset() + 8;
+        };
 
         // file-type size
-        public func getFileTypeSizeRelativeOffset() : Nat64 { getFileNameSizeRelativeOffset() + 8; };
+        public func getFileTypeSizeRelativeOffset() : Nat64 {
+            getFileNameSizeRelativeOffset() + 8;
+        };
 
         // file-data
-        public func getFileDataRelativeoffset() : Nat64 { getFileTypeSizeRelativeOffset() + 8; };
+        public func getFileDataRelativeoffset() : Nat64 {
+            getFileTypeSizeRelativeOffset() + 8;
+        };
 
         // file-name
         public func getFileNameRelativeOffset({
-            fileSize : Nat64
-        }) : Nat64 { getFileDataRelativeoffset() + fileSize; };
+            fileSize : Nat64;
+        }) : Nat64 { getFileDataRelativeoffset() + fileSize };
 
         // file-type
         public func getFileTypeRelativeOffset({
             fileSize : Nat64;
-            fileNameSize : Nat64
-        }) : Nat64 { getFileNameRelativeOffset({ fileSize }) + fileNameSize; };
+            fileNameSize : Nat64;
+        }) : Nat64 { getFileNameRelativeOffset({ fileSize }) + fileNameSize };
 
         // buffer
         public func getBufferRelativeOffset({
             fileSize : Nat64;
             fileNameSize : Nat64;
-            fileTypeSize : Nat64
-        }) : Nat64 { getFileTypeRelativeOffset({ fileSize; fileNameSize }) + fileTypeSize; };
+            fileTypeSize : Nat64;
+        }) : Nat64 {
+            getFileTypeRelativeOffset({ fileSize; fileNameSize }) + fileTypeSize;
+        };
 
         public func getAllRelativeOffsets({
             fileSize : Nat64;
             fileNameSize : Nat64;
-            fileTypeSize : Nat64
+            fileTypeSize : Nat64;
         }) : {
             fileStorageClassCodeOffset : Nat64;
             fileSizeOffset : Nat64;
@@ -59,10 +68,17 @@ module {
                 fileTypeSizeOffset = getFileTypeSizeRelativeOffset();
                 fileDataOffset = getFileDataRelativeoffset();
                 fileNameOffset = getFileNameRelativeOffset({ fileSize });
-                fileTypeOffset = getFileTypeRelativeOffset({ fileSize; fileNameSize });
-                bufferOffset = getBufferRelativeOffset({ fileSize; fileNameSize; fileTypeSize });
+                fileTypeOffset = getFileTypeRelativeOffset({
+                    fileSize;
+                    fileNameSize;
+                });
+                bufferOffset = getBufferRelativeOffset({
+                    fileSize;
+                    fileNameSize;
+                    fileTypeSize;
+                });
             };
         };
     };
 
-}
+};

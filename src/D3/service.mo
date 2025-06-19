@@ -1,8 +1,10 @@
 import Filebase "types/filebase";
 import Put "modules/put";
 import Get "modules/get";
+import Delete "modules/delete";
 import InputTypes "types/input";
 import OutputTypes "types/output";
+import Cleanup "modules/cleanup";
 
 module {
 
@@ -13,13 +15,19 @@ module {
 
         switch (updateOperationInput) {
             case (#StoreFile(storeFileInput)) {
-                return #StoreFileOutput(await Put.storeFile({ d3; storeFileInput; }))
+                return #StoreFileOutput(await Put.storeFile({ d3; storeFileInput }));
             };
             case (#StoreFileMetadata(storeFileMetadataInput)) {
-                return #StoreFileMetadataOutput(await Put.storeFileMetadata({ d3; storeFileMetadataInput; }))
+                return #StoreFileMetadataOutput(await Put.storeFileMetadata({ d3; storeFileMetadataInput }));
             };
             case (#StoreFileChunk(storeFileChunkInput)) {
-                return #StoreFileChunkOutput(await Put.storeFileChunk({ d3; storeFileChunkInput; }))
+                return #StoreFileChunkOutput(await Put.storeFileChunk({ d3; storeFileChunkInput }));
+            };
+            case (#CleanupAbandonedUploads(input)) {
+                return #CleanupAbandonedUploadsOutput(Cleanup.cleanupAbandonedUploads({ d3; timeoutNanos = input.timeoutNanos }));
+            };
+            case (#DeleteFile(deleteFileInput)) {
+                return #DeleteFileOutput(Delete.deleteFile({ d3; deleteFileInput }));
             };
         };
 
@@ -32,13 +40,13 @@ module {
 
         switch (queryOperationInput) {
             case (#GetFileMetadata(getFileMetadataInput)) {
-                return #GetFileMetadataOutput(Get.getFileMetadata({ d3; getFileMetadataInput; }))
+                return #GetFileMetadataOutput(Get.getFileMetadata({ d3; getFileMetadataInput }));
             };
             case (#GetFile(getFileInput)) {
-                return #GetFileOutput(Get.getFile({ d3; getFileInput; }))
+                return #GetFileOutput(Get.getFile({ d3; getFileInput }));
             };
             case (#GetFileIds(getFileIdsInput)) {
-                return #GetFileIdsOutput(Get.getFileIds({ d3; getFileIdsInput; }))
+                return #GetFileIdsOutput(Get.getFileIds({ d3; getFileIdsInput }));
             };
         };
     };

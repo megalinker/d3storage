@@ -1,11 +1,13 @@
 import Filebase "types/filebase";
 import Put "modules/put";
 import Get "modules/get";
+import Delete "modules/delete";
 import GetHttp "modules/getHttp";
 import Service "service";
 import OutputTypes "types/output";
 import InputTypes "types/input";
 import HttpTypes "types/http";
+import Cleanup "modules/cleanup";
 
 module {
 
@@ -25,6 +27,10 @@ module {
     public type StoreFileChunkInputType = InputTypes.StoreFileChunkInputType;
     public type StoreFileChunkOutputType = OutputTypes.StoreFileChunkOutputType;
     public let storeFileChunk = Put.storeFileChunk;
+
+    public type DeleteFileInputType = InputTypes.DeleteFileInputType;
+    public type DeleteFileOutputType = OutputTypes.DeleteFileOutputType;
+    public let deleteFile = Delete.deleteFile;
 
     ///////////////////////////// QUERY OPERATIONS ////////////////////////
 
@@ -50,6 +56,10 @@ module {
     public type QueryOperationInputType = InputTypes.QueryOperationInputType;
     public type QueryOperationOutputType = OutputTypes.QueryOperationOutputType;
     public let queryOperation = Service.queryOperation;
+
+    public type CleanupStats = Cleanup.CleanupStats;
+    public type CleanupAbandonedUploadsInputType = { timeoutNanos : Nat64 };
+    public let cleanupAbandonedUploads = Cleanup.cleanupAbandonedUploads;
 
     //////////////////////////// HTTP OPERATIONS ////////////////////////////
 
