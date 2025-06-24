@@ -1,20 +1,26 @@
 import Region "mo:base/Region";
 import Text "mo:base/Text";
+import Nat "mo:base/Nat";
 import Nat64 "mo:base/Nat64";
 import Buffer "mo:base/Buffer";
 import Debug "mo:base/Debug";
-import Map "mo:map/Map";
-import { nhash; thash } "mo:map/Map";
+import StableTrieMap "../utils/StableTrieMap";
 import Filebase "../types/filebase";
 import StorageClasses "../storageClasses";
 import InputTypes "../types/input";
 import OutputTypes "../types/output";
 import Commons "commons";
+import Utils "./utils";
 
 module {
 
     let { NTDO } = StorageClasses;
 
+    // Helper functions for StableTrieMap
+    let text_eq = Text.equal;
+    let text_hash = Text.hash;
+    let nat_eq = func(a : Nat, b : Nat) : Bool { a == b };
+    
     private type FileContext = {
         region : Region.Region;
         offset : Nat64;
@@ -24,10 +30,10 @@ module {
     };
 
     private func _getFileContext(d3 : Filebase.D3, fileId : Filebase.FileId) : ?FileContext {
-        switch (Map.get(d3.fileLocationMap, thash, fileId)) {
+        switch (StableTrieMap.get(d3.fileLocationMap, text_eq, text_hash, fileId)) {
             case (null) { return null };
             case (?fileLocation) {
-                switch (Map.get(d3.storageRegionMap, nhash, fileLocation.regionId)) {
+                switch (StableTrieMap.get(d3.storageRegionMap, nat_eq, Utils.hashNat, fileLocation.regionId)) {
                     case (null) { return null };
                     case (?storageRegion) {
                         let offset = fileLocation.offset;
@@ -143,9 +149,17 @@ module {
         let {} = getFileIdsInput;
         let fileLocationMap = d3.fileLocationMap;
 
-        let fileIdsBuffer = Buffer.Buffer<OutputTypes.FileIdItemType>(Map.size(fileLocationMap));
-        for ((fileId, { offset; fileName; fileType }) in Map.entries(fileLocationMap)) {
-            fileIdsBuffer.add({ fileId; offset; fileName; fileType });
+        let fileIdsBuffer = Buffer.Buffer<OutputTypes.FileIdItemType>(StableTrieMap.size(fileLocationMap));
+
+        // Note: The iterator for StableTrieMap (based on Trie) returns a different shape
+        for ((key, fileLocation) in StableTrieMap.entries(fileLocationMap)) {
+            let fileId = key;
+            fileIdsBuffer.add({
+                fileId = fileId;
+                offset = fileLocation.offset;
+                fileName = fileLocation.fileName;
+                fileType = fileLocation.fileType;
+            });
         };
 
         return {

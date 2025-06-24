@@ -1,18 +1,24 @@
+import StableTrieMap "../utils/StableTrieMap";
 import Filebase "../types/filebase";
 import StorageClasses "../storageClasses";
 import HttpTypes "../types/http";
 import HttpParser "mo:httpParser";
-import Map "mo:map/Map";
-import { nhash; thash } "mo:map/Map";
 import Array "mo:base/Array";
 import Region "mo:base/Region";
+import Nat "mo:base/Nat";
 import Nat64 "mo:base/Nat64";
 import Text "mo:base/Text";
 import Blob "mo:base/Blob";
+import Utils "./utils";
 
 module {
 
     let { NTDO } = StorageClasses;
+
+    // Helper functions for StableTrieMap
+    let text_eq = Text.equal;
+    let text_hash = Text.hash;
+    let nat_eq = func(a : Nat, b : Nat) : Bool { a == b };
 
     public func getFileHTTP({
         d3 : Filebase.D3;
@@ -60,7 +66,7 @@ module {
         let storageRegionMap = d3.storageRegionMap;
         let fileLocationMap = d3.fileLocationMap;
 
-        switch (Map.get(fileLocationMap, thash, fileId)) {
+        switch (StableTrieMap.get(fileLocationMap, text_eq, text_hash, fileId)) {
             case (null) {
                 return {
                     status_code = 404;
@@ -70,7 +76,7 @@ module {
                 };
             };
             case (?fileLocation) {
-                switch (Map.get(storageRegionMap, nhash, fileLocation.regionId)) {
+                switch (StableTrieMap.get(storageRegionMap, nat_eq, Utils.hashNat, fileLocation.regionId)) {
                     case (null) {
                         // This is a serious internal error, the file location points to a non-existent region.
                         return {
@@ -152,7 +158,7 @@ module {
         let storageRegionMap = d3.storageRegionMap;
         let fileLocationMap = d3.fileLocationMap;
 
-        switch (Map.get(fileLocationMap, thash, fileId)) {
+        switch (StableTrieMap.get(fileLocationMap, text_eq, text_hash, fileId)) {
             case (null) {
                 return {
                     token = null;
@@ -160,7 +166,7 @@ module {
                 };
             };
             case (?fileLocation) {
-                switch (Map.get(storageRegionMap, nhash, fileLocation.regionId)) {
+                switch (StableTrieMap.get(storageRegionMap, nat_eq, Utils.hashNat, fileLocation.regionId)) {
                     case (null) {
                         return {
                             token = null;

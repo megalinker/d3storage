@@ -1,7 +1,7 @@
-import Map "mo:map/Map";
+import StableTrieMap "../utils/StableTrieMap";
 import Region "mo:base/Region";
-import Buffer "mo:base/Buffer";
 import Time "mo:base/Time";
+import Vector "mo:vector";
 
 module {
     public type FileId = Text;
@@ -14,8 +14,8 @@ module {
 
     public type StorageRegion = {
         var offset : Nat64;
-        region : Region;
-        var freeList : Buffer.Buffer<FreeBlock>;
+        region : Region.Region;
+        var freeList : Vector.Vector<FreeBlock>;
     };
 
     public type FileStatus = {
@@ -37,8 +37,10 @@ module {
     public let CHUNK_SIZE : Nat64 = 1_800_000;
 
     public class D3() {
-        public let storageRegionMap : Map.Map<RegionId, StorageRegion> = Map.new();
-        public let fileLocationMap : Map.Map<FileId, FileLocation> = Map.new();
+        public var storageRegionMap : StableTrieMap.StableTrieMap<RegionId, StorageRegion> = StableTrieMap.new();
+        public var fileLocationMap : StableTrieMap.StableTrieMap<FileId, FileLocation> = StableTrieMap.new();
         public var nextRegionId : RegionId = 0;
+        public var bytesAllocated : Nat64 = 0;
+        public let BYTES_BUDGET : Nat64 = 3_758_096_384;
     };
 };

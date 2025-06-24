@@ -1,9 +1,8 @@
-import Map "mo:map/Map";
-import { thash } "mo:map/Map";
+import StableTrieMap "../utils/StableTrieMap";
 import Time "mo:base/Time";
 import Nat64 "mo:base/Nat64";
-import Int "mo:base/Int";
-import Array "mo:base/Array";
+import Buffer "mo:base/Buffer";
+import Text "mo:base/Text";
 import Filebase "../types/filebase";
 import Delete "delete";
 
@@ -15,60 +14,39 @@ module {
         bytesFreed : Nat64;
     };
 
-    // Deletes files that are in #Pending state for longer than the timeout period.
     public func cleanupAbandonedUploads({
         d3 : Filebase.D3;
         timeoutNanos : Nat64;
     }) : CleanupStats {
 
         let fileLocationMap = d3.fileLocationMap;
-        let now = Time.now();
+        let now : Time.Time = Time.now();
         var scanned : Nat = 0;
         var reclaimed : Nat = 0;
         var bytesFreed : Nat64 = 0;
 
-        var fileIdsToDelete : [Text] = [];
+        let fileIdsToDelete = Buffer.Buffer<Text>(StableTrieMap.size(fileLocationMap));
 
-        //======================================================================//
-        // CORRECTED ITERATION WITH SAFE `switch` UNWRAPPING                    //
-        //======================================================================//
-        let iter = Map.entries(fileLocationMap);
-        var currentEntry = iter.next();
+        let iter = StableTrieMap.entries(fileLocationMap);
 
-        while (currentEntry != null) {
-            switch (currentEntry) {
-                case (null) {
-                    // This case is technically handled by the while loop condition,
-                    // but a full switch is the most robust pattern.
-                };
-                case (?entry) {
-                    // `entry` is now the unwrapped tuple: (FileId, FileLocation)
-                    let fileId = entry.0;
-                    let fileLocation = entry.1;
+        for ((key, fileLocation) in iter) {
+            let fileId = key;
+            scanned += 1;
 
-                    // --- Your existing logic ---
-                    scanned += 1;
-                    switch (fileLocation.status) {
-                        case (#Pending) {
-                            let age = now - fileLocation.createdAt;
-                            if (age > Int.abs(Nat64.toNat(timeoutNanos))) {
-                                fileIdsToDelete := Array.append(fileIdsToDelete, [fileId]);
-                                bytesFreed := bytesFreed + fileLocation.totalAllocatedSize;
-                            };
-                        };
-                        case (#Complete) {
-                            // Do nothing
-                        };
+            switch (fileLocation.status) {
+                case (#Pending) {
+                    let age : Nat64 = Nat64.fromIntWrap(now - fileLocation.createdAt);
+                    if (age > timeoutNanos) {
+                        fileIdsToDelete.add(fileId);
+                        bytesFreed += fileLocation.totalAllocatedSize;
                     };
-                    // --- End of existing logic ---
+                };
+                case (#Complete) {
+                    // Do nothing
                 };
             };
-            // Get the next entry for the next iteration.
-            currentEntry := iter.next();
         };
-        //======================================================================//
 
-        // Deletion logic remains the same
         for (fileId in fileIdsToDelete.vals()) {
             ignore Delete.deleteFile({
                 d3;

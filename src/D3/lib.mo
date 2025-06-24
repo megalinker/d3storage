@@ -71,4 +71,6 @@ module {
     public type StreamingCallbackHttpResponse = HttpTypes.StreamingCallbackHttpResponse;
     public let httpStreamingCallback = GetHttp.httpStreamingCallback;
 
+    public type StreamingCallback = HttpTypes.StreamingCallback;
+    public type HttpStreamingCallbackActor = HttpTypes.HttpStreamingCallbackActor;
 };
