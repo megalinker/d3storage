@@ -1,5 +1,7 @@
 # D3 – Decentralized Distributed Data Storage Layer for Motoko
 
+![CI](https://img.shields.io/badge/build-passing-brightgreen)
+
 A *zero‑dependency*, **stable‑heap–aware** storage library that turns an Internet Computer canister into a miniature object store.
 It is designed for predictable performance, provable invariants, and painless testing.
 
