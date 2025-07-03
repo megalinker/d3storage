@@ -1,104 +1,84 @@
+//--- File: src/D3/modules/delete.mo ---
+
 import StableTrieMap "../utils/StableTrieMap";
-import Array "mo:base/Array";
-import Order "mo:base/Order";
 import Nat64 "mo:base/Nat64";
 import Text "mo:base/Text";
-import Nat "mo:base/Nat";
-import Vector "mo:vector";
 import Filebase "../types/filebase";
 import InputTypes "../types/input";
 import OutputTypes "../types/output";
 import Utils "utils";
+import BTree "mo:stableheapbtreemap/BTree";
+import Allocator "allocator";
 
 module {
-
-    let text_eq = Text.equal;
-    let text_hash = Text.hash;
-    let nat_eq = func(a : Nat, b : Nat) : Bool { a == b };
-
-    private func _compareFreeBlocks(a : Filebase.FreeBlock, b : Filebase.FreeBlock) : Order.Order {
-        return Nat64.compare(a.offset, b.offset);
-    };
-
-    private func _coalesceFreeList(storageRegion : Filebase.StorageRegion) {
-        if (Vector.size(storageRegion.freeList) <= 1) {
-            return;
-        };
-
-        let sortedFreeList = Array.sort<Filebase.FreeBlock>(
-            Vector.toArray(storageRegion.freeList),
-            _compareFreeBlocks,
-        );
-
-        let mergedList = Vector.new<Filebase.FreeBlock>();
-
-        if (sortedFreeList.size() > 0) {
-            var currentOffset = sortedFreeList[0].offset;
-            var currentSize = sortedFreeList[0].size;
-
-            var i = 1;
-            while (i < sortedFreeList.size()) {
-                let nextBlock = sortedFreeList[i];
-                if (currentOffset + currentSize == nextBlock.offset) {
-                    currentSize += nextBlock.size;
-                } else {
-                    Vector.add(
-                        mergedList,
-                        {
-                            offset = currentOffset;
-                            size = currentSize;
-                        },
-                    );
-                    currentOffset := nextBlock.offset;
-                    currentSize := nextBlock.size;
-                };
-                i += 1;
-            };
-            Vector.add(mergedList, { offset = currentOffset; size = currentSize });
-        };
-
-        storageRegion.freeList := mergedList;
-    };
-
-    public func coalesceFreeList(storageRegion : Filebase.StorageRegion) : () {
-        _coalesceFreeList(storageRegion);
-    };
-
     public func deleteFile({
         d3 : Filebase.D3;
         deleteFileInput : InputTypes.DeleteFileInputType;
     }) : OutputTypes.DeleteFileOutputType {
-
         let { fileId } = deleteFileInput;
 
-        let fileLocation = switch (StableTrieMap.get(d3.fileLocationMap, text_eq, text_hash, fileId)) {
-            case (null) {
-                return { success = false; error = ?"File not found." };
-            };
-            case (?loc) { loc };
+        let ?fileLocation = BTree.get(d3.fileLocationMap, Text.compare, fileId) else {
+            return { success = false; error = ?"File not found." };
         };
 
-        switch (StableTrieMap.get(d3.storageRegionMap, nat_eq, Utils.hashNat, fileLocation.regionId)) {
-            case (null) {
-                return {
-                    success = false;
-                    error = ?"Internal Error: Storage region for file not found.";
-                };
-            };
-            case (?storageRegion) {
-                let newFreeBlock : Filebase.FreeBlock = {
-                    offset = fileLocation.offset;
-                    size = fileLocation.totalAllocatedSize;
-                };
-
-                Vector.add(storageRegion.freeList, newFreeBlock);
-
-                _coalesceFreeList(storageRegion);
-
-                StableTrieMap.delete(d3.fileLocationMap, text_eq, text_hash, fileId);
-
-                return { success = true; error = null };
+        let ?storageRegion = StableTrieMap.get(d3.storageRegionMap, Utils.nat_eq, Utils.hashNat, fileLocation.regionId) else {
+            return {
+                success = false;
+                error = ?"Internal Error: Storage region for file not found.";
             };
         };
+
+        var blockToCoalesce : Filebase.FreeBlock = {
+            offset = fileLocation.offset;
+            size = fileLocation.totalAllocatedSize;
+        };
+
+        // 1. Check for a free block immediately to the RIGHT of our new block.
+        let rightNeighborOffset = Utils.checked_add(blockToCoalesce.offset, blockToCoalesce.size);
+        switch (BTree.get(storageRegion.freeBlocksByOffset, Utils.nat64_compare, rightNeighborOffset)) {
+            case null { /* No right neighbor to merge with */ };
+            case (?rightNeighborSize) {
+                // Found a right neighbor. Merge it into our current block.
+                Allocator.removeFromFreeLists(storageRegion, rightNeighborOffset, rightNeighborSize);
+                blockToCoalesce := {
+                    offset = blockToCoalesce.offset;
+                    size = blockToCoalesce.size + rightNeighborSize;
+                };
+            };
+        };
+
+        // 2. Check for a free block immediately to the LEFT of our new block.
+        // To do this, we scan backwards from our block's offset with a limit of 1.
+        let scanResult = BTree.scanLimit<Nat64, Nat64>(
+            storageRegion.freeBlocksByOffset,
+            Utils.nat64_compare,
+            0, // lower bound
+            blockToCoalesce.offset, // upper bound
+            #bwd, // direction
+            1 // limit
+        );
+
+        if (scanResult.results.size() > 0) {
+            let (leftOffset, leftSize) = scanResult.results[0];
+            if (Utils.checked_add(leftOffset, leftSize) == blockToCoalesce.offset) {
+                // Found an adjacent left neighbor. Merge our block into it.
+                // First, remove the old left block from the maps.
+                Allocator.removeFromFreeLists(storageRegion, leftOffset, leftSize);
+
+                // Then, update our block's offset and size.
+                blockToCoalesce := {
+                    offset = leftOffset;
+                    size = Utils.checked_add(blockToCoalesce.size, leftSize);
+                };
+            };
+        };
+
+        // 3. Add the final (potentially merged) block back to the free lists.
+        Allocator.addToFreeLists(storageRegion, blockToCoalesce);
+
+        // Finally, remove the file from the location map.
+        ignore BTree.delete(d3.fileLocationMap, Text.compare, fileId);
+
+        return { success = true; error = null };
     };
 };

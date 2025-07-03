@@ -57,7 +57,7 @@ module {
     public type QueryOperationOutputType = OutputTypes.QueryOperationOutputType;
     public let queryOperation = Service.queryOperation;
 
-    public type CleanupStats = Cleanup.CleanupStats;
+    public type CleanupStats = OutputTypes.CleanupStats;
     public type CleanupAbandonedUploadsInputType = { timeoutNanos : Nat64 };
     public let cleanupAbandonedUploads = Cleanup.cleanupAbandonedUploads;
 

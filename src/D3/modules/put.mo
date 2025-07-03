@@ -1,7 +1,6 @@
 import Region "mo:base/Region";
 import Text "mo:base/Text";
 import Nat64 "mo:base/Nat64";
-import Nat "mo:base/Nat";
 import Error "mo:base/Error";
 import Debug "mo:base/Debug";
 import Time "mo:base/Time";
@@ -12,17 +11,13 @@ import OutputTypes "../types/output";
 import Utils "utils";
 import StorageClasses "../storageClasses";
 import Commons "commons";
-import Delete "delete";
 import Vector "mo:vector";
+import BTree "mo:stableheapbtreemap/BTree";
+import Allocator "allocator";
 
 module {
 
     let { NTDO } = StorageClasses;
-
-    // Helper functions for StableTrieMap
-    let text_eq = Text.equal;
-    let text_hash = Text.hash;
-    let nat_eq = func(a : Nat, b : Nat) : Bool { a == b };
 
     private func evaluateRequiredPages({
         region : Region.Region;
@@ -46,63 +41,62 @@ module {
         offset : Nat64;
     } {
 
+        var bestFitOption : ?{
+            regionId : Filebase.RegionId;
+            storageRegion : Filebase.StorageRegion;
+            offset : Nat64;
+            foundSize : Nat64;
+        } = null;
+
+        var bestAppendOption : ?{
+            regionId : Filebase.RegionId;
+            storageRegion : Filebase.StorageRegion;
+            requiredPages : Nat64;
+        } = null;
+
         // ───────────────────────────────────────────────
-        // STRATEGY 1: first-fit inside existing free blocks
+        // STRATEGY 1: Combined Single-Pass Search
         // ───────────────────────────────────────────────
         let regionIdIterator = StableTrieMap.keys(d3.storageRegionMap);
 
         for (regionId : Filebase.RegionId in regionIdIterator) {
-            let storageRegion = switch (StableTrieMap.get(d3.storageRegionMap, nat_eq, Utils.hashNat, regionId)) {
+            let storageRegion = switch (StableTrieMap.get(d3.storageRegionMap, Utils.nat_eq, Utils.hashNat, regionId)) {
                 case (?r) { r };
                 case null {
                     Debug.trap("unreachable: map key disappeared during iteration");
                 };
             };
 
-            var i : Nat = 0;
-            let freeList = storageRegion.freeList;
+            // --- Part 1: Check for a best-fit block in this region ---
+            let scanResult = BTree.scanLimit<Nat64, Vector.Vector<Nat64>>(
+                storageRegion.freeListBySize,
+                Utils.nat64_compare,
+                requiredSize, // lower bound
+                0xFFFFFFFFFFFFFFFF, // upper bound (Nat64.max)
+                #fwd,
+                1,
+            );
 
-            while (i < Vector.size(freeList)) {
-                let block = Vector.get(freeList, i);
-
-                if (block.size >= requiredSize) {
-                    let offset = block.offset;
-                    let leftoverSize = block.size - requiredSize;
-
-                    let lastIndex = Vector.size(freeList) - 1;
-                    if (i < lastIndex) {
-                        let lastBlock = Vector.get(freeList, lastIndex);
-                        Vector.put(freeList, i, lastBlock);
-                    };
-                    ignore Vector.removeLast(freeList);
-
-                    if (leftoverSize > 16) {
-                        let leftoverBlock = {
-                            offset = offset + requiredSize;
-                            size = leftoverSize;
-                        };
-                        Vector.add(freeList, leftoverBlock);
-                    };
-
-                    Delete.coalesceFreeList(storageRegion);
-
-                    return ?{ regionId; storageRegion; offset };
+            if (scanResult.results.size() > 0) {
+                let (foundSize, offsetsVec) = scanResult.results[0];
+                // Is this fit better than the best one we've found so far?
+                // A better fit is one that is smaller (less wasted space).
+                let isBetterFit = switch (bestFitOption) {
+                    case null { true }; // First one we've found
+                    case (?bf) { foundSize < bf.foundSize };
                 };
-                i += 1;
-            };
-        };
 
-        // ───────────────────────────────────────────────
-        // STRATEGY 2: append at end of an existing region (grow if needed)
-        // ───────────────────────────────────────────────
-        let regionIdIterator2 = StableTrieMap.keys(d3.storageRegionMap);
-
-        for (regionId : Filebase.RegionId in regionIdIterator2) {
-            let storageRegion = switch (StableTrieMap.get(d3.storageRegionMap, nat_eq, Utils.hashNat, regionId)) {
-                case (?r) { r };
-                case null { Debug.trap("unreachable") };
+                if (isBetterFit) {
+                    bestFitOption := ?{
+                        regionId;
+                        storageRegion;
+                        offset = Vector.get(offsetsVec, 0); // Take the first available offset
+                        foundSize;
+                    };
+                };
             };
 
+            // --- Part 2: Evaluate this region as a candidate for appending ---
             let requiredPages = evaluateRequiredPages({
                 region = storageRegion.region;
                 previousOffset = storageRegion.offset;
@@ -110,21 +104,64 @@ module {
             });
 
             if (Region.size(storageRegion.region) + requiredPages <= 65_536) {
-                growWithBudget(d3, storageRegion.region, requiredPages);
+                // Is this a better append candidate than the best one so far?
+                // A better candidate is one that requires fewer pages to grow.
+                let isBetterCandidate = switch (bestAppendOption) {
+                    case null { true }; // First one we've found
+                    case (?ba) { requiredPages < ba.requiredPages };
+                };
 
-                let offset = storageRegion.offset;
-                storageRegion.offset := offset + requiredSize;
-
-                return ?{
-                    regionId;
-                    storageRegion;
-                    offset;
+                if (isBetterCandidate) {
+                    bestAppendOption := ?{
+                        regionId;
+                        storageRegion;
+                        requiredPages;
+                    };
                 };
             };
         };
 
         // ───────────────────────────────────────────────
-        // STRATEGY 3: create a brand-new region
+        // Prioritize Best-Fit over Appending
+        // ───────────────────────────────────────────────
+        switch (bestFitOption) {
+            case (?{ regionId; storageRegion; offset; foundSize }) {
+                // Remove this block from both free list maps.
+                Allocator.removeFromFreeLists(storageRegion, offset, foundSize);
+
+                // Check if we have leftover space worth keeping.
+                let leftoverSize = foundSize - requiredSize;
+                if (leftoverSize > 16) {
+                    // 16 bytes is a reasonable minimum.
+                    // Add the leftover piece back to the free lists.
+                    let leftoverBlock = {
+                        offset = Utils.checked_add(offset, requiredSize);
+                        size = leftoverSize;
+                    };
+                    Allocator.addToFreeLists(storageRegion, leftoverBlock);
+                };
+
+                return ?{ regionId; storageRegion; offset };
+            };
+            case null {
+                // No best-fit block was found, fall through to check append option.
+            };
+        };
+
+        switch (bestAppendOption) {
+            case (?{ regionId; storageRegion; requiredPages }) {
+                growWithBudget(d3, storageRegion.region, requiredPages);
+                let offset = storageRegion.offset;
+                storageRegion.offset := Utils.checked_add(offset, requiredSize);
+                return ?{ regionId; storageRegion; offset };
+            };
+            case null {
+                // No append candidate was found, fall through to create a new region.
+            };
+        };
+
+        // ───────────────────────────────────────────────
+        // STRATEGY 2: Create a brand-new region
         // ───────────────────────────────────────────────
         let requiredPages = (requiredSize + Filebase.PAGE_SIZE - 1) / Filebase.PAGE_SIZE;
         if (requiredPages > 65_536) {
@@ -137,13 +174,15 @@ module {
         let newRegionId = d3.nextRegionId;
         d3.nextRegionId += 1;
 
+        // Initialize the new StorageRegion with empty B-Tree Maps
         let newStorageRegion : Filebase.StorageRegion = {
             var offset = requiredSize;
             region = newRegion;
-            var freeList = Vector.new<Filebase.FreeBlock>();
+            var freeBlocksByOffset = BTree.init<Nat64, Nat64>(null);
+            var freeListBySize = BTree.init<Nat64, Vector.Vector<Nat64>>(null);
         };
 
-        StableTrieMap.put(d3.storageRegionMap, nat_eq, Utils.hashNat, newRegionId, newStorageRegion);
+        StableTrieMap.put(d3.storageRegionMap, Utils.nat_eq, Utils.hashNat, newRegionId, newStorageRegion);
 
         return ?{
             regionId = newRegionId;
@@ -153,7 +192,6 @@ module {
     };
 
     private func growWithBudget(d3 : Filebase.D3, region : Region.Region, pages : Nat64) {
-
         if (pages == 0) { return };
 
         let bytesToAdd : Nat64 = pages * Filebase.PAGE_SIZE;
@@ -175,7 +213,6 @@ module {
         d3 : Filebase.D3;
         storeFileInput : InputTypes.StoreFileInputType;
     }) : async OutputTypes.StoreFileOutputType {
-
         let { fileDataObject; fileName; fileType } = storeFileInput;
         let fileLocationMap = d3.fileLocationMap;
 
@@ -192,7 +229,7 @@ module {
             fileTypeSize = fileTypeObjectSize;
         });
 
-        let totalAllocatedSize = offsets.bufferOffset;
+        let totalAllocatedSize = Utils.round_up_to_8(offsets.bufferOffset);
 
         switch (_findAvailableSpace(d3, totalAllocatedSize)) {
             case (null) {
@@ -210,15 +247,14 @@ module {
                 Region.storeBlob(region, newFileOffset + offsets.fileNameOffset, fileNameObject);
                 Region.storeBlob(region, newFileOffset + offsets.fileTypeOffset, fileTypeObject);
 
-                StableTrieMap.put(
+                ignore BTree.insert(
                     fileLocationMap,
-                    text_eq,
-                    text_hash,
+                    Text.compare,
                     fileId,
                     {
                         regionId;
                         offset = newFileOffset;
-                        totalAllocatedSize = totalAllocatedSize;
+                        totalAllocatedSize;
                         fileName;
                         fileType;
                         createdAt = Time.now();
@@ -235,7 +271,6 @@ module {
         d3 : Filebase.D3;
         storeFileMetadataInput : InputTypes.StoreFileMetadataInputType;
     }) : async OutputTypes.StoreFileMetadataOutputType {
-
         let { fileSizeInBytes; fileName; fileType } = storeFileMetadataInput;
         if (fileSizeInBytes < Filebase.CHUNK_SIZE) {
             throw Error.reject("File size is less than the minimum chunk size of " # debug_show (Filebase.CHUNK_SIZE) # " bytes.");
@@ -256,7 +291,8 @@ module {
             fileTypeSize = fileTypeObjectSize;
         });
 
-        let totalAllocatedSize = offsets.bufferOffset + (Filebase.PAGE_SIZE - (offsets.bufferOffset % Filebase.PAGE_SIZE));
+        // The region growth logic in _findAvailableSpace handles the page-based physical memory.
+        let totalAllocatedSize = Utils.round_up_to_8(offsets.bufferOffset);
 
         switch (_findAvailableSpace(d3, totalAllocatedSize)) {
             case (null) {
@@ -273,15 +309,14 @@ module {
                 Region.storeBlob(region, newFileOffset + offsets.fileNameOffset, fileNameObject);
                 Region.storeBlob(region, newFileOffset + offsets.fileTypeOffset, fileTypeObject);
 
-                StableTrieMap.put(
+                ignore BTree.insert(
                     fileLocationMap,
-                    text_eq,
-                    text_hash,
+                    Text.compare,
                     fileId,
                     {
                         regionId;
                         offset = newFileOffset;
-                        totalAllocatedSize = totalAllocatedSize;
+                        totalAllocatedSize;
                         fileName;
                         fileType;
                         createdAt = Time.now();
@@ -304,19 +339,24 @@ module {
         d3 : Filebase.D3;
         storeFileChunkInput : InputTypes.StoreFileChunkInputType;
     }) : async OutputTypes.StoreFileChunkOutputType {
-
         let { fileId; chunkData; chunkIndex } = storeFileChunkInput;
         let storageRegionMap = d3.storageRegionMap;
         let fileLocationMap = d3.fileLocationMap;
 
-        switch (StableTrieMap.get(fileLocationMap, text_eq, text_hash, fileId)) {
+        switch (BTree.get(fileLocationMap, Text.compare, fileId)) {
             case (null) {
                 throw Error.reject("File " # fileId # " not found.");
             };
             case (?fileLocation) {
-                switch (StableTrieMap.get(storageRegionMap, nat_eq, Utils.hashNat, fileLocation.regionId)) {
+                // Reject writes to a file that is already finalized.
+                if (fileLocation.status == #Complete) {
+                    throw Error.reject("File " # fileId # " is already complete. No more chunks can be stored.");
+                };
+
+                switch (StableTrieMap.get(storageRegionMap, Utils.nat_eq, Utils.hashNat, fileLocation.regionId)) {
                     case (null) {
                         Debug.trap("storeFileChunk: Internal data corruption. FileLocation points to a missing StorageRegion.");
+                        // This path is a trap, so returning a value is for type-checking, it won't be reached.
                         return { fileId = ""; chunkIndex = 0 };
                     };
                     case (?storageRegion) {
@@ -344,17 +384,12 @@ module {
                         let chunkStartOffset = offset + NTDO.getFileDataRelativeoffset() + chunkIndex * Filebase.CHUNK_SIZE;
                         Region.storeBlob(region, chunkStartOffset, chunkData);
 
+                        // This logic correctly marks the file as complete on the final chunk.
                         if (chunkIndex == numOfChunks - 1) {
-                            let updatedFileLocation : Filebase.FileLocation = {
-                                regionId = fileLocation.regionId;
-                                offset = fileLocation.offset;
-                                totalAllocatedSize = fileLocation.totalAllocatedSize;
-                                fileName = fileLocation.fileName;
-                                fileType = fileLocation.fileType;
-                                createdAt = fileLocation.createdAt;
-                                status = #Complete;
+                            let updatedFileLocation = {
+                                fileLocation with status = #Complete
                             };
-                            StableTrieMap.put(fileLocationMap, text_eq, text_hash, fileId, updatedFileLocation);
+                            ignore BTree.insert(fileLocationMap, Text.compare, fileId, updatedFileLocation);
                         };
 
                         return {

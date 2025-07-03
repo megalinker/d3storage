@@ -1,44 +1,54 @@
-import StableTrieMap "../utils/StableTrieMap";
 import Time "mo:base/Time";
 import Nat64 "mo:base/Nat64";
-import Buffer "mo:base/Buffer";
 import Text "mo:base/Text";
+import BTree "mo:stableheapbtreemap/BTree";
 import Filebase "../types/filebase";
 import Delete "delete";
+import OutputTypes "../types/output";
 
 module {
-
-    public type CleanupStats = {
-        scanned : Nat;
-        reclaimed : Nat;
-        bytesFreed : Nat64;
-    };
 
     public func cleanupAbandonedUploads({
         d3 : Filebase.D3;
         timeoutNanos : Nat64;
-    }) : CleanupStats {
+        startKey : ?Text;
+        limit : Nat;
+    }) : OutputTypes.CleanupStats {
 
-        let fileLocationMap = d3.fileLocationMap;
         let now : Time.Time = Time.now();
         var scanned : Nat = 0;
         var reclaimed : Nat = 0;
         var bytesFreed : Nat64 = 0;
 
-        let fileIdsToDelete = Buffer.Buffer<Text>(StableTrieMap.size(fileLocationMap));
+        let lowerBound = switch (startKey) {
+            case null { "" };
+            case (?key) { key };
+        };
 
-        let iter = StableTrieMap.entries(fileLocationMap);
+        let scanResult = BTree.scanLimit<Text, Filebase.FileLocation>(
+            d3.fileLocationMap,
+            Text.compare,
+            lowerBound,
+            "\u{FFFF}",
+            #fwd,
+            limit,
+        );
 
-        for ((key, fileLocation) in iter) {
-            let fileId = key;
+        for ((fileId, fileLocation) in scanResult.results.vals()) {
             scanned += 1;
 
             switch (fileLocation.status) {
                 case (#Pending) {
                     let age : Nat64 = Nat64.fromIntWrap(now - fileLocation.createdAt);
                     if (age > timeoutNanos) {
-                        fileIdsToDelete.add(fileId);
-                        bytesFreed += fileLocation.totalAllocatedSize;
+                        let deleteResult = Delete.deleteFile({
+                            d3;
+                            deleteFileInput = { fileId };
+                        });
+                        if (deleteResult.success) {
+                            reclaimed += 1;
+                            bytesFreed += fileLocation.totalAllocatedSize;
+                        };
                     };
                 };
                 case (#Complete) {
@@ -47,14 +57,11 @@ module {
             };
         };
 
-        for (fileId in fileIdsToDelete.vals()) {
-            ignore Delete.deleteFile({
-                d3;
-                deleteFileInput = { fileId };
-            });
-            reclaimed += 1;
+        return {
+            scanned;
+            reclaimed;
+            bytesFreed;
+            nextKey = scanResult.nextKey;
         };
-
-        return { scanned; reclaimed; bytesFreed };
     };
 };

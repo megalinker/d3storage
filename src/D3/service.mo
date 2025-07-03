@@ -24,7 +24,13 @@ module {
                 return #StoreFileChunkOutput(await Put.storeFileChunk({ d3; storeFileChunkInput }));
             };
             case (#CleanupAbandonedUploads(input)) {
-                return #CleanupAbandonedUploadsOutput(Cleanup.cleanupAbandonedUploads({ d3; timeoutNanos = input.timeoutNanos }));
+                let stats = Cleanup.cleanupAbandonedUploads({
+                    d3;
+                    timeoutNanos = input.timeoutNanos;
+                    startKey = input.startKey;
+                    limit = input.limit;
+                });
+                return #CleanupAbandonedUploadsOutput(stats);
             };
             case (#DeleteFile(deleteFileInput)) {
                 return #DeleteFileOutput(Delete.deleteFile({ d3; deleteFileInput }));

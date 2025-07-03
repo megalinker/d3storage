@@ -55,6 +55,7 @@ module {
         scanned : Nat;
         reclaimed : Nat;
         bytesFreed : Nat64;
+        nextKey : ?Text;
     };
 
     public type UpdateOperationOutputType = {

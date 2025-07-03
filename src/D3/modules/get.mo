@@ -1,9 +1,9 @@
 import Region "mo:base/Region";
 import Text "mo:base/Text";
-import Nat "mo:base/Nat";
 import Nat64 "mo:base/Nat64";
 import Buffer "mo:base/Buffer";
 import Debug "mo:base/Debug";
+import BTree "mo:stableheapbtreemap/BTree";
 import StableTrieMap "../utils/StableTrieMap";
 import Filebase "../types/filebase";
 import StorageClasses "../storageClasses";
@@ -13,14 +13,25 @@ import Commons "commons";
 import Utils "./utils";
 
 module {
-
     let { NTDO } = StorageClasses;
 
-    // Helper functions for StableTrieMap
-    let text_eq = Text.equal;
-    let text_hash = Text.hash;
-    let nat_eq = func(a : Nat, b : Nat) : Bool { a == b };
-    
+    public func _getFileAndRegion(d3 : Filebase.D3, fileId : Filebase.FileId) : ?{
+        fileLocation : Filebase.FileLocation;
+        storageRegion : Filebase.StorageRegion;
+    } {
+        switch (BTree.get(d3.fileLocationMap, Text.compare, fileId)) {
+            case (null) { return null };
+            case (?fileLocation) {
+                switch (StableTrieMap.get(d3.storageRegionMap, Utils.nat_eq, Utils.hashNat, fileLocation.regionId)) {
+                    case (null) { return null }; // Internal error: region is missing
+                    case (?storageRegion) {
+                        return ?{ fileLocation; storageRegion };
+                    };
+                };
+            };
+        };
+    };
+
     private type FileContext = {
         region : Region.Region;
         offset : Nat64;
@@ -30,27 +41,22 @@ module {
     };
 
     private func _getFileContext(d3 : Filebase.D3, fileId : Filebase.FileId) : ?FileContext {
-        switch (StableTrieMap.get(d3.fileLocationMap, text_eq, text_hash, fileId)) {
+        switch (_getFileAndRegion(d3, fileId)) {
             case (null) { return null };
-            case (?fileLocation) {
-                switch (StableTrieMap.get(d3.storageRegionMap, nat_eq, Utils.hashNat, fileLocation.regionId)) {
-                    case (null) { return null };
-                    case (?storageRegion) {
-                        let offset = fileLocation.offset;
-                        let region = storageRegion.region;
+            case (?{ fileLocation; storageRegion }) {
+                let offset = fileLocation.offset;
+                let region = storageRegion.region;
 
-                        let fileSize = Region.loadNat64(region, offset + NTDO.getFileSizeRelativeOffset());
-                        let fileNameSize = Region.loadNat64(region, offset + NTDO.getFileNameSizeRelativeOffset());
-                        let fileTypeSize = Region.loadNat64(region, offset + NTDO.getFileTypeSizeRelativeOffset());
+                let fileSize = Region.loadNat64(region, offset + NTDO.getFileSizeRelativeOffset());
+                let fileNameSize = Region.loadNat64(region, offset + NTDO.getFileNameSizeRelativeOffset());
+                let fileTypeSize = Region.loadNat64(region, offset + NTDO.getFileTypeSizeRelativeOffset());
 
-                        return ?{
-                            region;
-                            offset;
-                            fileSize;
-                            fileNameSize;
-                            fileTypeSize;
-                        };
-                    };
+                return ?{
+                    region;
+                    offset;
+                    fileSize;
+                    fileNameSize;
+                    fileTypeSize;
                 };
             };
         };
@@ -149,11 +155,9 @@ module {
         let {} = getFileIdsInput;
         let fileLocationMap = d3.fileLocationMap;
 
-        let fileIdsBuffer = Buffer.Buffer<OutputTypes.FileIdItemType>(StableTrieMap.size(fileLocationMap));
+        let fileIdsBuffer = Buffer.Buffer<OutputTypes.FileIdItemType>(BTree.size(fileLocationMap));
 
-        // Note: The iterator for StableTrieMap (based on Trie) returns a different shape
-        for ((key, fileLocation) in StableTrieMap.entries(fileLocationMap)) {
-            let fileId = key;
+        for ((fileId, fileLocation) in BTree.entries(fileLocationMap)) {
             fileIdsBuffer.add({
                 fileId = fileId;
                 offset = fileLocation.offset;

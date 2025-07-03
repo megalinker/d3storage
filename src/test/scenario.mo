@@ -9,7 +9,7 @@ import Iter "mo:base/Iter";
 import Buffer "mo:base/Buffer";
 import Debug "mo:base/Debug";
 import Text "mo:base/Text";
-import StableTrieMap "../D3/utils/StableTrieMap";
+import BTree "mo:stableheapbtreemap/BTree";
 import Utils "../D3/modules/utils";
 import HttpParser "mo:httpParser";
 import Array "mo:base/Array";
@@ -52,19 +52,17 @@ module Scenario {
         Debug.print("  - Metadata stored. FileID: " # fileId # ", Chunks: " # Nat64.toText(numOfChunks));
 
         for (i_int in Iter.range(0, Int.abs(Nat64.toNat(numOfChunks) - 1))) {
-            // Convert the loop variable back to Nat64 for calculations
             let i = Nat64.fromNat(Int.abs(i_int));
             let start = i * CHUNK_SIZE;
             let end = Nat64.min((i + 1) * CHUNK_SIZE, fileSize);
             let chunkSize = end - start;
 
-            // Use Array.slice and Blob.fromArray to extract a chunk from the blob.
             let chunkBlob = Blob.fromArray(
                 Iter.toArray(
                     Array.slice<Nat8>(
                         Blob.toArray(fileBlob),
                         Nat64.toNat(start),
-                        Nat64.toNat(start) + Nat64.toNat(chunkSize)
+                        Nat64.toNat(start) + Nat64.toNat(chunkSize),
                     )
                 )
             );
@@ -82,7 +80,7 @@ module Scenario {
         Debug.print("  - Chunked upload complete.");
 
         // Verify file status is now #Complete
-        let ?loc = StableTrieMap.get(d3.fileLocationMap, Text.equal, Text.hash, fileId) else Debug.trap("File location not found after upload");
+        let ?loc = BTree.get(d3.fileLocationMap, Text.compare, fileId) else Debug.trap("File location not found after upload");
         assert (loc.status == #Complete);
 
         // 2. Verification
@@ -163,7 +161,7 @@ module Scenario {
                 for (b in nextBytes.vals()) {
                     Vector.add<Nat8>(buf, b);
                 };
-                Blob.fromArray(Vector.toArray(buf))
+                Blob.fromArray(Vector.toArray(buf));
             },
         );
 
@@ -177,7 +175,7 @@ module Scenario {
             deleteFileInput = { fileId };
         });
         assert deleteResult.success;
-        assert (StableTrieMap.get(d3.fileLocationMap, Text.equal, Text.hash, fileId) == null);
+        assert (BTree.get(d3.fileLocationMap, Text.compare, fileId) == null);
         Debug.print("  - File deleted successfully and removed from map.");
 
         // Verify space was reclaimed correctly
@@ -197,9 +195,11 @@ module Scenario {
         let stats = D3.cleanupAbandonedUploads({
             d3;
             timeoutNanos = 0;
+            startKey = null;
+            limit = 100;
         });
         assert (stats.reclaimed == 1);
-        assert (StableTrieMap.get(d3.fileLocationMap, Text.equal, Text.hash, abandonedMeta.fileId) == null);
+        assert (BTree.get(d3.fileLocationMap, Text.compare, abandonedMeta.fileId) == null);
         Debug.print("  - cleanupAbandonedUploads successfully reclaimed 1 pending file.");
 
         Property.checkAllRegions(d3);

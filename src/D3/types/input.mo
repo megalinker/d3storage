@@ -38,6 +38,8 @@ module {
 
     public type CleanupAbandonedUploadsInputType = {
         timeoutNanos : Nat64;
+        startKey : ?Text;
+        limit : Nat;
     };
 
     public type UpdateOperationInputType = {

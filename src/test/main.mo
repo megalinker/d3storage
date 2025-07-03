@@ -1,9 +1,11 @@
 import D3 "../D3";
+import Filebase "../D3/types/filebase";
 import Property "property";
 import Scenario "scenario";
 import Random "mo:base/Random";
 import Debug "mo:base/Debug";
-import Nat "mo:base/Nat"
+import Nat "mo:base/Nat";
+import Nat64 "mo:base/Nat64";
 
 actor class TestMain() = self {
 
@@ -49,6 +51,58 @@ actor class TestMain() = self {
         "All deterministic scenarios passed ✅";
     };
 
+    // ====================================================================
+    // === Driver function for the incremental cleanup process.         ===
+    // ====================================================================
+    public shared(_msg) func runCleanup() : async Text {
+        Debug.print("### STARTING INCREMENTAL CLEANUP ###");
+
+        var nextKey : ?Text = null;
+        var totalReclaimed : Nat = 0;
+        var totalBytesFreed : Nat64 = 0;
+        let BATCH_SIZE : Nat = 1000; // Process 1000 files per message
+        var done = false;
+
+        // The while loop orchestrates the batch processing.
+        // Each iteration is a separate "turn" that respects IC cycle limits.
+        while (not done) {
+            let stats = D3.cleanupAbandonedUploads({
+                d3;
+                timeoutNanos = 3_600_000_000_000; // 1 hour in nanoseconds
+                startKey = nextKey;
+                limit = BATCH_SIZE;
+            });
+
+            // Aggregate stats from the completed batch
+            totalReclaimed += stats.reclaimed;
+            totalBytesFreed += stats.bytesFreed;
+
+            Debug.print(
+                "Cleanup Batch Report: Scanned=" # Nat.toText(stats.scanned) #
+                ", Reclaimed=" # Nat.toText(stats.reclaimed) #
+                ", Bytes Freed=" # Nat64.toText(stats.bytesFreed)
+            );
+
+            // Check if there is more work to do
+            switch (stats.nextKey) {
+                case null {
+                    // No next key was returned, so we are finished.
+                    done := true;
+                };
+                case (?key) {
+                    // A next key was returned. Set it as the starting
+                    // point for the next iteration of the loop.
+                    nextKey := ?key;
+                };
+            };
+        };
+
+        let report = "Cleanup finished. Total Reclaimed: " # Nat.toText(totalReclaimed) # ", Total Bytes Freed: " # Nat64.toText(totalBytesFreed);
+        Debug.print("### " # report # " ###");
+        return report;
+    };
+
+
     // Run all available tests
     public shared func run_all_tests() : async Text {
         let scenario_result = await self.run_scenarios();
@@ -56,6 +110,19 @@ actor class TestMain() = self {
 
         let fuzz_result = await self.fuzz();
         Debug.print(fuzz_result);
+
+        Debug.print("\n--- Running a test cleanup ---");
+        // First, create an abandoned upload to test against
+        ignore await D3.storeFileMetadata({
+            d3;
+            storeFileMetadataInput = {
+                fileSizeInBytes = 2 * Filebase.CHUNK_SIZE;
+                fileName = "abandoned_for_test.dat";
+                fileType = "application/octet-stream";
+            };
+        });
+        let cleanup_result = await self.runCleanup();
+        Debug.print(cleanup_result);
 
         "\nAll tests completed successfully! 🎉";
     };
